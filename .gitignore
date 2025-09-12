@@ -1,0 +1,16 @@
+# Vagrant
+.vagrant/
+
+# Logs
+*.log
+
+# System
+.DS_Store
+Thumbs.db
+
+# Python (만일 python 코드도 추가될 경우)
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
