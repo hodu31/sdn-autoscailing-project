@@ -1,0 +1,23 @@
+---
+- name: Setup SDN Auto Scaling Project Infrastructure
+  hosts: localhost
+  gather_facts: no
+  tasks:
+    - name: Display project information
+      debug:
+        msg:
+          - "=== SDN Auto Scaling Project ==="
+          - "Use the following playbooks to setup infrastructure:"
+          - ""
+          - "1. Setup monitoring stack (Docker-based):"
+          - "   ansible-playbook playbooks/setup-monitoring.yml"
+          - ""
+          - "2. Setup SDN controller (Native installation):"
+          - "   ansible-playbook playbooks/setup-sdn.yml"
+          - ""
+          - "3. Test connectivity:"
+          - "   ansible all -m ping"
+
+- import_playbook: setup-monitoring.yml
+- import_playbook: setup-sdn.yml
+- import_playbook: setup-app.yml

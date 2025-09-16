@@ -1,0 +1,308 @@
+---
+- name: Setup Docker-based Monitoring Stack (Prometheus + Grafana)
+  hosts: management
+  become: yes
+  vars:
+    monitoring_dir: /opt/monitoring
+    
+  tasks:
+    # 시스템 최적화 및 자동 업데이트 비활성화
+    - include_tasks: ../tasks/system-optimization.yml
+    
+    - name: Install Docker dependencies
+      dnf:
+        name:
+          - yum-utils
+          - device-mapper-persistent-data
+          - lvm2
+        state: present
+
+    - name: Add Docker repository
+      get_url:
+        url: https://download.docker.com/linux/centos/docker-ce.repo
+        dest: /etc/yum.repos.d/docker-ce.repo
+
+    - name: Install Docker
+      dnf:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-compose-plugin
+        state: present
+
+    - name: Start and enable Docker
+      systemd:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Install Docker Compose
+      get_url:
+        url: "https://github.com/docker/compose/releases/download/v2.20.0/docker-compose-linux-x86_64"
+        dest: /usr/local/bin/docker-compose
+        mode: '0755'
+
+    - name: Create monitoring directory
+      file:
+        path: "{{ monitoring_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: Create monitoring subdirectories
+      file:
+        path: "{{ monitoring_dir }}/{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - prometheus
+        - grafana/provisioning/datasources
+        - grafana/provisioning/dashboards
+        - grafana/dashboards
+        - alertmanager
+
+    - name: Create Prometheus configuration
+      copy:
+        content: |
+          global:
+            scrape_interval: 15s
+            evaluation_interval: 15s
+
+          rule_files:
+            - "alert_rules.yml"
+
+          alerting:
+            alertmanagers:
+              - static_configs:
+                  - targets:
+                    - alertmanager:9093
+
+          scrape_configs:
+            - job_name: 'prometheus'
+              static_configs:
+                - targets: ['localhost:9090']
+
+            - job_name: 'node-exporter'
+              static_configs:
+                - targets: ['node-exporter:9100']
+
+            - job_name: 'app-servers'
+              static_configs:
+                - targets: ['192.168.100.30:9100']
+
+            - job_name: 'sdn-controller'
+              static_configs:
+                - targets: ['192.168.100.20:8080']
+        dest: "{{ monitoring_dir }}/prometheus/prometheus.yml"
+
+    - name: Create Prometheus alert rules
+      copy:
+        content: |
+          groups:
+            - name: system_alerts
+              rules:
+                - alert: HighCPUUsage
+                  expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+                  for: 2m
+                  labels:
+                    severity: warning
+                  annotations:
+                    summary: "High CPU usage detected"
+                    description: "CPU usage is above 80% for more than 2 minutes"
+
+                - alert: HighMemoryUsage
+                  expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100 > 85
+                  for: 5m
+                  labels:
+                    severity: warning
+                  annotations:
+                    summary: "High memory usage detected"
+                    description: "Memory usage is above 85% for more than 5 minutes"
+        dest: "{{ monitoring_dir }}/prometheus/alert_rules.yml"
+
+    - name: Create Grafana datasource configuration
+      copy:
+        content: |
+          apiVersion: 1
+          
+          datasources:
+            - name: Prometheus
+              type: prometheus
+              access: proxy
+              url: http://prometheus:9090
+              isDefault: true
+              editable: true
+        dest: "{{ monitoring_dir }}/grafana/provisioning/datasources/prometheus.yml"
+
+    - name: Create Grafana dashboard provisioning
+      copy:
+        content: |
+          apiVersion: 1
+          
+          providers:
+            - name: 'default'
+              orgId: 1
+              folder: ''
+              type: file
+              disableDeletion: false
+              editable: true
+              options:
+                path: /var/lib/grafana/dashboards
+        dest: "{{ monitoring_dir }}/grafana/provisioning/dashboards/dashboard.yml"
+
+    - name: Create AlertManager configuration
+      copy:
+        content: |
+          global:
+            smtp_smarthost: 'localhost:587'
+            smtp_from: 'alerts@sdn-project.local'
+
+          route:
+            group_by: ['alertname']
+            group_wait: 10s
+            group_interval: 10s
+            repeat_interval: 1h
+            receiver: 'web.hook'
+
+          receivers:
+            - name: 'web.hook'
+              webhook_configs:
+                - url: 'http://192.168.100.10:5001/webhook'
+                  send_resolved: true
+        dest: "{{ monitoring_dir }}/alertmanager/alertmanager.yml"
+
+    - name: Create Docker Compose file
+      copy:
+        content: |
+          version: '3.8'
+
+          services:
+            prometheus:
+              image: prom/prometheus:v2.45.0
+              container_name: prometheus
+              restart: unless-stopped
+              ports:
+                - "9090:9090"
+              volumes:
+                - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+                - ./prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml
+                - prometheus_data:/prometheus
+              command:
+                - '--config.file=/etc/prometheus/prometheus.yml'
+                - '--storage.tsdb.path=/prometheus'
+                - '--web.console.templates=/etc/prometheus/consoles'
+                - '--web.console.libraries=/etc/prometheus/console_libraries'
+                - '--storage.tsdb.retention.time=200h'
+                - '--web.enable-lifecycle'
+              networks:
+                - monitoring
+
+            grafana:
+              image: grafana/grafana:10.0.0
+              container_name: grafana
+              restart: unless-stopped
+              ports:
+                - "3000:3000"
+              volumes:
+                - grafana_data:/var/lib/grafana
+                - ./grafana/provisioning:/etc/grafana/provisioning
+                - ./grafana/dashboards:/var/lib/grafana/dashboards
+              environment:
+                - GF_SECURITY_ADMIN_USER=admin
+                - GF_SECURITY_ADMIN_PASSWORD=admin123
+                - GF_USERS_ALLOW_SIGN_UP=false
+              networks:
+                - monitoring
+              depends_on:
+                - prometheus
+
+            alertmanager:
+              image: prom/alertmanager:v0.25.0
+              container_name: alertmanager
+              restart: unless-stopped
+              ports:
+                - "9093:9093"
+              volumes:
+                - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml
+                - alertmanager_data:/alertmanager
+              command:
+                - '--config.file=/etc/alertmanager/alertmanager.yml'
+                - '--storage.path=/alertmanager'
+              networks:
+                - monitoring
+
+            node-exporter:
+              image: prom/node-exporter:v1.6.0
+              container_name: node-exporter
+              restart: unless-stopped
+              ports:
+                - "9100:9100"
+              volumes:
+                - /proc:/host/proc:ro
+                - /sys:/host/sys:ro
+                - /:/rootfs:ro
+              command:
+                - '--path.procfs=/host/proc'
+                - '--path.rootfs=/rootfs'
+                - '--path.sysfs=/host/sys'
+                - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+              networks:
+                - monitoring
+
+          volumes:
+            prometheus_data:
+            grafana_data:
+            alertmanager_data:
+
+          networks:
+            monitoring:
+              driver: bridge
+        dest: "{{ monitoring_dir }}/docker-compose.yml"
+
+    - name: Set permissions for monitoring directory
+      file:
+        path: "{{ monitoring_dir }}"
+        owner: root
+        group: root
+        recurse: yes
+
+    - name: Open firewall ports for monitoring services
+      firewalld:
+        port: "{{ item }}/tcp"
+        permanent: yes
+        state: enabled
+      loop:
+        - 3000   # Grafana
+        - 9090   # Prometheus
+        - 9093   # AlertManager
+        - 9100   # Node Exporter
+
+    - name: Reload firewall
+      command: firewall-cmd --reload
+
+    - name: Start monitoring stack with Docker Compose
+      shell: |
+        cd {{ monitoring_dir }}
+        docker-compose pull
+        docker-compose up -d
+      register: docker_result
+
+    - name: Wait for services to start
+      wait_for:
+        port: "{{ item }}"
+        host: 192.168.100.10
+        delay: 10
+        timeout: 60
+      loop:
+        - 3000
+        - 9090
+        - 9093
+
+    - name: Display monitoring URLs
+      debug:
+        msg:
+          - "=== 모니터링 스택 설치 완료 ==="
+          - "Grafana: http://192.168.100.10:3000 (admin/admin123)"
+          - "Prometheus: http://192.168.100.10:9090"
+          - "AlertManager: http://192.168.100.10:9093"
+          - "Node Exporter: http://192.168.100.10:9100"

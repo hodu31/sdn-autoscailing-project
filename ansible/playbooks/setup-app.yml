@@ -1,0 +1,74 @@
+---
+- name: Setup Application Server System Optimization
+  hosts: app_servers
+  become: yes
+  
+  tasks:
+    # 시스템 최적화 및 자동 업데이트 비활성화
+    - include_tasks: ../tasks/system-optimization.yml
+    
+    - name: Install basic packages
+      dnf:
+        name:
+          - curl
+          - wget
+          - vim
+          - git
+          - htop
+          - net-tools
+        state: present
+
+    - name: Install Docker
+      shell: |
+        curl -fsSL https://get.docker.com -o get-docker.sh
+        sh get-docker.sh
+      args:
+        creates: /usr/bin/docker
+
+    - name: Start and enable Docker
+      systemd:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Install Node Exporter for monitoring
+      docker_container:
+        name: node-exporter
+        image: prom/node-exporter:v1.6.0
+        state: started
+        restart_policy: always
+        ports:
+          - "9100:9100"
+        volumes:
+          - /proc:/host/proc:ro
+          - /sys:/host/sys:ro
+          - /:/rootfs:ro
+        command:
+          - '--path.procfs=/host/proc'
+          - '--path.rootfs=/rootfs'
+          - '--path.sysfs=/host/sys'
+          - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+
+    - name: Open firewall ports for app services
+      firewalld:
+        port: "{{ item }}/tcp"
+        permanent: yes
+        state: enabled
+      loop:
+        - 80      # HTTP
+        - 443     # HTTPS
+        - 9100    # Node Exporter
+        - 30000   # Kubernetes NodePort start
+        - 32767   # Kubernetes NodePort end
+
+    - name: Reload firewall
+      command: firewall-cmd --reload
+
+    - name: Display app server status
+      debug:
+        msg:
+          - "=== App Server 최적화 완료 ==="
+          - "- Docker: 설치됨 ✓"
+          - "- Node Exporter: 실행 중 ✓"
+          - "- 자동 업데이트: 비활성화 ✓"
+          - "- 시스템: 최적화됨 ✓"
