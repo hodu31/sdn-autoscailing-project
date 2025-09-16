@@ -91,8 +91,6 @@ Vagrant.configure("2") do |config|
       nmcli con mod "System eth1" ipv4.addresses "192.168.100.20/24"
       nmcli con down "System eth1" && nmcli con up "System eth1"
     SHELL
-    
-    sdn.vm.provision "shell", path: "scripts/setup-sdn.sh"
   end
   
   # 어플리케이션 vm
@@ -124,7 +122,6 @@ Vagrant.configure("2") do |config|
       nmcli con down "System eth1" && nmcli con up "System eth1"
     SHELL
     
-    app.vm.provision "shell", path: "scripts/setup-docker.sh"
   end
   
   # 어플리케이션 vm 2 (추후 확장용)
