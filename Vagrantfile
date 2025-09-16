@@ -1,27 +1,46 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
 
-# .env 파일 로드
-require 'dotenv'
-Dotenv.load
+require 'yaml'
 
-# 환경변수가 없을 경우 기본값 설정
-def get_env(key, default_value)
-  ENV[key] || default_value
+# config.yaml 파일 로드
+config_file = File.join(File.dirname(__FILE__), 'config.yaml')
+if File.exist?(config_file)
+  settings = YAML.load_file(config_file)
+else
+  puts "Warning: config.yaml not found. Using default values."
+  settings = {}
+end
+
+# 설정값 가져오기 (YAML 파일 또는 기본값)
+def get_setting(settings, key, default_value)
+  settings[key] || default_value
 end
 
 Vagrant.configure("2") do |config|
   
-  # 환경변수에서 설정값 로드
-  root_password = get_env('ROOT_PASSWORD', 'defaultpass123')
-  admin_password = get_env('ADMIN_PASSWORD', 'admin123')
-  network_subnet = get_env('NETWORK_SUBNET', '192.168.100')
-  mgmt_ip = get_env('MGMT_IP', '192.168.100.10')
-  sdn_ip = get_env('SDN_IP', '192.168.100.20')
-  app1_ip = get_env('APP1_IP', '192.168.100.30')
-  mgmt_memory = get_env('MGMT_MEMORY', '2048').to_i
-  sdn_memory = get_env('SDN_MEMORY', '1024').to_i
-  app_memory = get_env('APP_MEMORY', '2048').to_i
+  # config.yaml에서 설정값 로드
+  root_password = get_setting(settings, 'ROOT_PASSWORD', 'defaultpass123')
+  admin_password = get_setting(settings, 'ADMIN_PASSWORD', 'admin123')
+  vagrant_password = get_setting(settings, 'VAGRANT_PASSWORD', 'vagrant')
+  
+  network_subnet = get_setting(settings, 'NETWORK_SUBNET', '192.168.100')
+  mgmt_ip = get_setting(settings, 'MGMT_IP', '192.168.100.10')
+  sdn_ip = get_setting(settings, 'SDN_IP', '192.168.100.20')
+  app1_ip = get_setting(settings, 'APP1_IP', '192.168.100.30')
+  
+  mgmt_memory = get_setting(settings, 'MGMT_MEMORY', '2048').to_i
+  sdn_memory = get_setting(settings, 'SDN_MEMORY', '1024').to_i
+  app_memory = get_setting(settings, 'APP_MEMORY', '2048').to_i
+  
+  # 추가 설정값들
+  grafana_admin_user = get_setting(settings, 'GRAFANA_ADMIN_USER', 'admin')
+  grafana_admin_password = get_setting(settings, 'GRAFANA_ADMIN_PASSWORD', 'admin')
+  prometheus_retention = get_setting(settings, 'PROMETHEUS_RETENTION', '168h')
+  
+  sdn_user = get_setting(settings, 'SDN_USER', 'sdn')
+  openflow_port = get_setting(settings, 'OPENFLOW_PORT', '6653').to_i
+  sdn_api_port = get_setting(settings, 'SDN_API_PORT', '8080').to_i
   
   # 공통 네트워크 설정 스크립트
   $network_script = <<-SCRIPT
@@ -50,8 +69,11 @@ Vagrant.configure("2") do |config|
     # Root 계정 비밀번호 설정
     echo 'root:#{root_password}' | chpasswd
     
+    # Vagrant 계정 비밀번호 변경
+    echo 'vagrant:#{vagrant_password}' | chpasswd
+    
     # 새 관리자 계정 생성
-    useradd -m -s /bin/bash admin
+    useradd -m -s /bin/bash admin 2>/dev/null || true
     echo 'admin:#{admin_password}' | chpasswd
     usermod -aG wheel admin
     
@@ -63,7 +85,7 @@ Vagrant.configure("2") do |config|
     echo "=== 계정 설정 완료 ==="
     echo "Root: root/#{root_password}"
     echo "Admin: admin/#{admin_password}"
-    echo "Vagrant: vagrant/vagrant"
+    echo "Vagrant: vagrant/#{vagrant_password}"
   SCRIPT
   
   # Management Server
@@ -102,7 +124,10 @@ Vagrant.configure("2") do |config|
         "ROOT_PASSWORD" => root_password,
         "ADMIN_PASSWORD" => admin_password,
         "SDN_IP" => sdn_ip,
-        "APP1_IP" => app1_ip
+        "APP1_IP" => app1_ip,
+        "GRAFANA_ADMIN_USER" => grafana_admin_user,
+        "GRAFANA_ADMIN_PASSWORD" => grafana_admin_password,
+        "PROMETHEUS_RETENTION" => prometheus_retention
       }
   end
   
@@ -124,9 +149,9 @@ Vagrant.configure("2") do |config|
       netmask: "255.255.255.0"
     
     # 포트 포워딩
-    sdn.vm.network "forwarded_port", guest: 6653, host: 6653   # OpenFlow
-    sdn.vm.network "forwarded_port", guest: 8080, host: 8080   # SDN API
-    sdn.vm.network "forwarded_port", guest: 22, host: 2220     # SSH
+    sdn.vm.network "forwarded_port", guest: openflow_port, host: openflow_port   # OpenFlow
+    sdn.vm.network "forwarded_port", guest: sdn_api_port, host: sdn_api_port     # SDN API
+    sdn.vm.network "forwarded_port", guest: 22, host: 2220                       # SSH
     
     # 프로비저닝 실행
     sdn.vm.provision "shell", inline: $account_setup
@@ -134,7 +159,13 @@ Vagrant.configure("2") do |config|
     sdn.vm.provision "shell", inline: <<-SHELL
       nmcli con mod "System eth1" ipv4.addresses "#{sdn_ip}/24"
       nmcli con down "System eth1" && nmcli con up "System eth1"
+      
+      # SDN 사용자 생성
+      useradd -m -s /bin/bash #{sdn_user} 2>/dev/null || true
+      echo '#{sdn_user}:#{admin_password}' | chpasswd
+      usermod -aG wheel #{sdn_user}
     SHELL
+    
   end
   
   # Application Server
