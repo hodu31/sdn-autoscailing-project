@@ -9,6 +9,7 @@ Vagrant.configure("2") do |config|
       vmware.gui = false
       vmware.memory = "1024"
       vmware.cpus = 2
+      vmware.vmx["displayName"] = "mgmt-server"
     end
     mgmt.vm.hostname = "mgmt-server"
     mgmt.vm.synced_folder ".", "/vagrant", disabled: true
@@ -29,6 +30,7 @@ Vagrant.configure("2") do |config|
       vmware.gui = false
       vmware.memory = "1024"
       vmware.cpus = 2
+      vmware.vmx["displayName"] = "sdn-server"
     end
     sdn.vm.hostname = "sdn-controller"
     sdn.vm.synced_folder ".", "/vagrant", disabled: true
@@ -44,6 +46,7 @@ Vagrant.configure("2") do |config|
       vmware.gui = false
       vmware.memory = "2048"
       vmware.cpus = 2
+      vmware.vmx["displayName"] = "app1"
     end
     app.vm.hostname = "app-server1"
     app.vm.synced_folder ".", "/vagrant", disabled: true
