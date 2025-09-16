@@ -1,6 +1,10 @@
 # Vagrant
 .vagrant/
 
+# Environment Variables (보안)
+.env
+config.yaml        # ⭐ 추가: YAML 설정 파일 보호
+
 # Logs
 *.log
 
@@ -14,3 +18,15 @@ __pycache__/
 *.pyo
 *.pyd
 *.egg-info/
+
+# Ansible
+*.retry
+
+# Docker
+docker-compose.override.yml
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
