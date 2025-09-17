@@ -27,77 +27,29 @@ Vagrant.configure("2") do |config|
   network_subnet = get_setting(settings, 'NETWORK_SUBNET', '192.168.100')
   mgmt_ip = get_setting(settings, 'MGMT_IP', '192.168.100.10')
   sdn_ip = get_setting(settings, 'SDN_IP', '192.168.100.20')
-  app1_ip = get_setting(settings, 'APP1_IP', '192.168.100.30')
+  k8s_master_ip = get_setting(settings, 'K8S_MASTER_IP', '192.168.100.30')
+  k8s_worker_start_ip = get_setting(settings, 'K8S_WORKER_START_IP', '31')
   
   mgmt_memory = get_setting(settings, 'MGMT_MEMORY', '2048').to_i
   sdn_memory = get_setting(settings, 'SDN_MEMORY', '1024').to_i
-  app_memory = get_setting(settings, 'APP_MEMORY', '2048').to_i
-  
-  # 네트워크 설정 스크립트 (단일 네트워크 인터페이스용)
-  $network_script = <<-SCRIPT
-    # 네트워크 인터페이스 확인
-    echo "=== 네트워크 인터페이스 목록 ==="
-    ip link show
-    nmcli con show
-    
-    # 방화벽 설정
-    systemctl start firewalld
-    firewall-cmd --permanent --add-service=ssh
-    firewall-cmd --permanent --zone=trusted --add-source=192.168.100.0/24
-    firewall-cmd --reload
-    
-    # SELinux 설정
-    setenforce 0 2>/dev/null || true
-    
-    # DNS 설정
-    echo "nameserver 168.126.63.1" >> /etc/resolv.conf
-    
-    # 필수 패키지 설치
-    dnf install -y python3 python3-pip net-tools
-    
-    echo "=== 기본 네트워크 설정 완료 ==="
-  SCRIPT
+  k8s_master_memory = get_setting(settings, 'K8S_MASTER_MEMORY', '3072').to_i
+  k8s_worker_memory = get_setting(settings, 'K8S_WORKER_MEMORY', '2048').to_i
+  worker_count = get_setting(settings, 'K8S_WORKER_COUNT', 2).to_i
 
-  # 계정 및 SSH 설정 스크립트
-  $account_ssh_setup = <<-SCRIPT
-    # Root 계정 비밀번호 설정
-    echo 'root:#{root_password}' | chpasswd
-    
-    # Vagrant 계정 비밀번호 변경
-    echo 'vagrant:#{vagrant_password}' | chpasswd
-    
-    # 관리자 계정 생성
-    useradd -m -s /bin/bash admin 2>/dev/null || true
-    echo 'admin:#{admin_password}' | chpasswd
-    usermod -aG wheel admin
-    
-    # sudoers 설정
-    echo "vagrant ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/vagrant
-    echo "admin ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/admin
-    chmod 440 /etc/sudoers.d/vagrant
-    chmod 440 /etc/sudoers.d/admin
-    
-    # SSH 설정
-    sed -i 's/^#PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
-    sed -i 's/^PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config
-    sed -i 's/^#PubkeyAuthentication.*/PubkeyAuthentication yes/' /etc/ssh/sshd_config
-    
-    # SSH 키 설정
-    mkdir -p /home/vagrant/.ssh
-    chmod 700 /home/vagrant/.ssh
-    if [ -f /home/vagrant/.ssh/authorized_keys ]; then
-        chmod 600 /home/vagrant/.ssh/authorized_keys
-    fi
-    chown -R vagrant:vagrant /home/vagrant/.ssh
-    
-    # SSH 서비스 재시작
-    systemctl restart sshd
-    systemctl enable sshd
-    
-    echo "=== 계정 및 SSH 설정 완료 ==="
-  SCRIPT
+  # 공통 환경변수 설정
+  common_env = {
+    'ROOT_PASSWORD' => root_password,
+    'ADMIN_PASSWORD' => admin_password,
+    'VAGRANT_PASSWORD' => vagrant_password,
+    'NETWORK_SUBNET' => network_subnet,
+    'MGMT_IP' => mgmt_ip,
+    'SDN_IP' => sdn_ip,
+    'K8S_MASTER_IP' => k8s_master_ip,
+    'K8S_WORKER_START_IP' => k8s_worker_start_ip,
+    'K8S_WORKER_COUNT' => worker_count.to_s
+  }
   
-  # Management Server
+  # Management Server (VM1)
   config.vm.define "mgmt" do |mgmt|
     mgmt.vm.box = "generic/rocky9"
     mgmt.vm.provider "vmware_desktop" do |vmware|
@@ -108,128 +60,89 @@ Vagrant.configure("2") do |config|
     end
     
     mgmt.vm.hostname = "mgmt-server"
-    
-    # synced_folder 비활성화
     mgmt.vm.synced_folder ".", "/vagrant", disabled: true
+    mgmt.vm.network "private_network", ip: mgmt_ip, netmask: "255.255.255.0", adapter: 1
     
-    # Private 네트워크만 설정 (eth0로 설정됨)
-    mgmt.vm.network "private_network", 
-      ip: mgmt_ip,
-      netmask: "255.255.255.0",
-      adapter: 1  # 첫 번째 어댑터로 설정
-    
-    # 프로비저닝
-    mgmt.vm.provision "shell", inline: $account_ssh_setup
-    mgmt.vm.provision "shell", inline: $network_script
-    
-    # IP 설정 (eth0 기준)
-    mgmt.vm.provision "shell", inline: <<-SHELL
-      # 현재 네트워크 연결 확인 및 설정
-      MAIN_CON=$(nmcli -t -f NAME,DEVICE con show | grep -E "(eth0|ens33|ens160)" | head -1 | cut -d: -f1)
-      
-      if [ -n "$MAIN_CON" ]; then
-        echo "메인 연결 발견: $MAIN_CON"
-        nmcli con mod "$MAIN_CON" ipv4.method manual
-        nmcli con mod "$MAIN_CON" ipv4.addresses "#{mgmt_ip}/24"
-        nmcli con mod "$MAIN_CON" ipv4.gateway "#{network_subnet}.0"
-        nmcli con mod "$MAIN_CON" ipv4.dns "168.126.63.1"
-        nmcli con down "$MAIN_CON" && nmcli con up "$MAIN_CON"
-      else
-        echo "WARNING: 메인 네트워크 연결을 찾을 수 없습니다"
-        # 수동으로 IP 설정
-        ip addr add #{mgmt_ip}/24 dev eth0 2>/dev/null || ip addr add #{mgmt_ip}/24 dev ens33 2>/dev/null
-      fi
-      
-      # 네트워크 상태 확인
-      echo "=== 최종 네트워크 상태 ==="
-      ip addr show
-      ip route show
-      echo "==========================="
-    SHELL
+    # 프로비저닝 스크립트 실행
+    mgmt.vm.provision "shell", path: "scripts/provisioning/account-setup.sh", env: common_env
+    mgmt.vm.provision "shell", path: "scripts/provisioning/network-setup.sh", env: common_env
+    mgmt.vm.provision "shell", path: "scripts/provisioning/docker-install.sh", env: common_env
+    mgmt.vm.provision "shell", path: "scripts/provisioning/mgmt-setup.sh", env: common_env
   end
   
-  # SDN Controller
+  # SDN Controller (VM2)
   config.vm.define "sdn" do |sdn|
     sdn.vm.box = "generic/rocky9"
     sdn.vm.provider "vmware_desktop" do |vmware|
       vmware.gui = false
       vmware.memory = sdn_memory
       vmware.cpus = 2
-      vmware.vmx["displayName"] = "sdn-server"
+      vmware.vmx["displayName"] = "sdn-controller"
     end
     
     sdn.vm.hostname = "sdn-controller"
     sdn.vm.synced_folder ".", "/vagrant", disabled: true
+    sdn.vm.network "private_network", ip: sdn_ip, netmask: "255.255.255.0", adapter: 1
     
-    # Private 네트워크만 설정
-    sdn.vm.network "private_network", 
-      ip: sdn_ip,
-      netmask: "255.255.255.0",
-      adapter: 1
-    
-    # 프로비저닝
-    sdn.vm.provision "shell", inline: $account_ssh_setup
-    sdn.vm.provision "shell", inline: $network_script
-    
-    sdn.vm.provision "shell", inline: <<-SHELL
-      # 네트워크 설정
-      MAIN_CON=$(nmcli -t -f NAME,DEVICE con show | grep -E "(eth0|ens33|ens160)" | head -1 | cut -d: -f1)
-      
-      if [ -n "$MAIN_CON" ]; then
-        nmcli con mod "$MAIN_CON" ipv4.method manual
-        nmcli con mod "$MAIN_CON" ipv4.addresses "#{sdn_ip}/24"
-        nmcli con mod "$MAIN_CON" ipv4.gateway "#{network_subnet}.0"
-        nmcli con mod "$MAIN_CON" ipv4.dns "168.126.63.1"
-        nmcli con down "$MAIN_CON" && nmcli con up "$MAIN_CON"
-      fi
-      
-      # SDN 사용자 생성
-      useradd -m -s /bin/bash sdn 2>/dev/null || true
-      echo 'sdn:#{admin_password}' | chpasswd
-      usermod -aG wheel sdn
-      
-      # 네트워크 상태 확인
-      ip addr show
-    SHELL
+    # 프로비저닝 스크립트 실행
+    sdn.vm.provision "shell", path: "scripts/provisioning/account-setup.sh", env: common_env
+    sdn.vm.provision "shell", path: "scripts/provisioning/network-setup.sh", env: common_env
+    sdn.vm.provision "shell", path: "scripts/provisioning/sdn-setup.sh", env: common_env
   end
   
-  # Application Server
-  config.vm.define "app1" do |app|
-    app.vm.box = "generic/rocky9"
-    app.vm.provider "vmware_desktop" do |vmware|
+  # Kubernetes Master (VM3)
+  config.vm.define "k8s-master" do |master|
+    master.vm.box = "generic/rocky9"
+    master.vm.provider "vmware_desktop" do |vmware|
       vmware.gui = false
-      vmware.memory = app_memory
+      vmware.memory = k8s_master_memory
       vmware.cpus = 2
-      vmware.vmx["displayName"] = "app1"
+      vmware.vmx["displayName"] = "k8s-master"
     end
     
-    app.vm.hostname = "app-server1"
-    app.vm.synced_folder ".", "/vagrant", disabled: true
+    master.vm.hostname = "k8s-master"
+    master.vm.synced_folder ".", "/vagrant", disabled: true
+    master.vm.network "private_network", ip: k8s_master_ip, netmask: "255.255.255.0", adapter: 1
     
-    # Private 네트워크만 설정
-    app.vm.network "private_network", 
-      ip: app1_ip,
-      netmask: "255.255.255.0",
-      adapter: 1
-    
-    # 프로비저닝
-    app.vm.provision "shell", inline: $account_ssh_setup
-    app.vm.provision "shell", inline: $network_script
-    
-    app.vm.provision "shell", inline: <<-SHELL
-      # 네트워크 설정
-      MAIN_CON=$(nmcli -t -f NAME,DEVICE con show | grep -E "(eth0|ens33|ens160)" | head -1 | cut -d: -f1)
+    # 프로비저닝 스크립트 실행
+    master.vm.provision "shell", path: "scripts/provisioning/account-setup.sh", env: common_env
+    master.vm.provision "shell", path: "scripts/provisioning/network-setup.sh", env: common_env
+    master.vm.provision "shell", path: "scripts/provisioning/docker-install.sh", env: common_env
+    master.vm.provision "shell", path: "scripts/provisioning/containerd-setup.sh", env: common_env
+    master.vm.provision "shell", path: "scripts/provisioning/k8s-install.sh", env: common_env
+    master.vm.provision "shell", path: "scripts/provisioning/k8s-master-setup.sh", env: common_env
+  end
+  
+  # Kubernetes Workers (VM4+)
+  (1..worker_count).each do |i|
+    config.vm.define "k8s-worker#{i}" do |worker|
+      worker.vm.box = "generic/rocky9"
+      worker.vm.provider "vmware_desktop" do |vmware|
+        vmware.gui = false
+        vmware.memory = k8s_worker_memory
+        vmware.cpus = 2
+        vmware.vmx["displayName"] = "k8s-worker#{i}"
+      end
       
-      if [ -n "$MAIN_CON" ]; then
-        nmcli con mod "$MAIN_CON" ipv4.method manual
-        nmcli con mod "$MAIN_CON" ipv4.addresses "#{app1_ip}/24"
-        nmcli con mod "$MAIN_CON" ipv4.gateway "#{network_subnet}.0"
-        nmcli con mod "$MAIN_CON" ipv4.dns "168.126.63.1"
-        nmcli con down "$MAIN_CON" && nmcli con up "$MAIN_CON"
-      fi
+      worker.vm.hostname = "k8s-worker#{i}"
+      worker.vm.synced_folder ".", "/vagrant", disabled: true
       
-      # 네트워크 상태 확인
-      ip addr show
-    SHELL
+      worker_ip = "#{network_subnet}.#{k8s_worker_start_ip.to_i + i - 1}"
+      worker.vm.network "private_network", ip: worker_ip, netmask: "255.255.255.0", adapter: 1
+      
+      # Worker 전용 환경변수 추가
+      worker_env = common_env.merge({
+        'WORKER_IP' => worker_ip,
+        'WORKER_NUM' => i.to_s
+      })
+      
+      # 프로비저닝 스크립트 실행
+      worker.vm.provision "shell", path: "scripts/provisioning/account-setup.sh", env: worker_env
+      worker.vm.provision "shell", path: "scripts/provisioning/network-setup.sh", env: worker_env
+      worker.vm.provision "shell", path: "scripts/provisioning/docker-install.sh", env: worker_env
+      worker.vm.provision "shell", path: "scripts/provisioning/containerd-setup.sh", env: worker_env
+      worker.vm.provision "shell", path: "scripts/provisioning/k8s-install.sh", env: worker_env
+      worker.vm.provision "shell", path: "scripts/provisioning/k8s-worker-setup.sh", env: worker_env
+    end
   end
 end
