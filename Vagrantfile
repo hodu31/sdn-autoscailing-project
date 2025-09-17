@@ -57,6 +57,7 @@ Vagrant.configure("2") do |config|
       vmware.memory = mgmt_memory
       vmware.cpus = 2
       vmware.vmx["displayName"] = "mgmt-server"
+      vmware.linked_clone = false 
     end
     
     mgmt.vm.hostname = "mgmt-server"
@@ -78,6 +79,7 @@ Vagrant.configure("2") do |config|
       vmware.memory = sdn_memory
       vmware.cpus = 2
       vmware.vmx["displayName"] = "sdn-controller"
+      vmware.linked_clone = false 
     end
     
     sdn.vm.hostname = "sdn-controller"
@@ -98,6 +100,7 @@ Vagrant.configure("2") do |config|
       vmware.memory = k8s_master_memory
       vmware.cpus = 2
       vmware.vmx["displayName"] = "k8s-master"
+      vmware.linked_clone = false 
     end
     
     master.vm.hostname = "k8s-master"
@@ -122,6 +125,7 @@ Vagrant.configure("2") do |config|
         vmware.memory = k8s_worker_memory
         vmware.cpus = 2
         vmware.vmx["displayName"] = "k8s-worker#{i}"
+        vmware.linked_clone = false 
       end
       
       worker.vm.hostname = "k8s-worker#{i}"
