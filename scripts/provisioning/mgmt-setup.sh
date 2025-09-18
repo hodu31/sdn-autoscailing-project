@@ -13,32 +13,23 @@ NETWORK_SUBNET=${NETWORK_SUBNET:-"192.168.100"}
 K8S_WORKER_START_IP=${K8S_WORKER_START_IP:-"31"}
 K8S_WORKER_COUNT=${K8S_WORKER_COUNT:-"2"}
 
-echo "=== 네트워크 설정 ==="
-MAIN_CON=$(nmcli -t -f NAME,DEVICE con show | grep -E "(eth0|ens33|ens160)" | head -1 | cut -d: -f1)
-
-if [ -n "$MAIN_CON" ]; then
-    echo "메인 연결 발견: $MAIN_CON"
-    nmcli con mod "$MAIN_CON" ipv4.method manual
-    nmcli con mod "$MAIN_CON" ipv4.addresses "${MGMT_IP}/24"
-    nmcli con mod "$MAIN_CON" ipv4.gateway "${NETWORK_SUBNET}.1"
-    nmcli con mod "$MAIN_CON" ipv4.dns "168.126.63.1"
-    nmcli con down "$MAIN_CON" && nmcli con up "$MAIN_CON"
-fi
-
 echo "=== 관리 도구 설치 ==="
 # EPEL 저장소 추가
 dnf install -y epel-release
 
 # Ansible 설치
 dnf install -y ansible
-
-# Git 설치
-dnf install -y git
-
 # Python 패키지 설치
 pip3 install prometheus-client
 
 echo "=== Hosts 파일 업데이트 ==="
+# 기존 항목이 있으면 제거
+sed -i '/mgmt-server/d' /etc/hosts
+sed -i '/sdn-controller/d' /etc/hosts
+sed -i '/k8s-master/d' /etc/hosts
+sed -i '/k8s-worker/d' /etc/hosts
+
+# 새로운 항목 추가
 cat <<EOF >> /etc/hosts
 ${MGMT_IP} mgmt-server
 ${SDN_IP} sdn-controller

@@ -58,6 +58,11 @@ Vagrant.configure("2") do |config|
       vmware.cpus = 2
       vmware.vmx["displayName"] = "mgmt-server"
       vmware.linked_clone = false 
+
+      # VMware Workstation 17 호환성 설정
+      vmware.vmx["virtualhw.version"] = "19"  # Workstation 17.x 호환
+      vmware.vmx["virtualHW.productCompatibility"] = "hosted"
+      vmware.vmx["tools.syncTime"] = "TRUE"
     end
     
     mgmt.vm.hostname = "mgmt-server"
@@ -80,6 +85,10 @@ Vagrant.configure("2") do |config|
       vmware.cpus = 2
       vmware.vmx["displayName"] = "sdn-controller"
       vmware.linked_clone = false 
+      # VMware Workstation 17 호환성 설정
+      vmware.vmx["virtualhw.version"] = "19"  # Workstation 17.x 호환
+      vmware.vmx["virtualHW.productCompatibility"] = "hosted"
+      vmware.vmx["tools.syncTime"] = "TRUE"
     end
     
     sdn.vm.hostname = "sdn-controller"
@@ -101,6 +110,10 @@ Vagrant.configure("2") do |config|
       vmware.cpus = 2
       vmware.vmx["displayName"] = "k8s-master"
       vmware.linked_clone = false 
+      # VMware Workstation 17 호환성 설정
+      vmware.vmx["virtualhw.version"] = "19"  # Workstation 17.x 호환
+      vmware.vmx["virtualHW.productCompatibility"] = "hosted"
+      vmware.vmx["tools.syncTime"] = "TRUE"
     end
     
     master.vm.hostname = "k8s-master"
@@ -126,6 +139,10 @@ Vagrant.configure("2") do |config|
         vmware.cpus = 2
         vmware.vmx["displayName"] = "k8s-worker#{i}"
         vmware.linked_clone = false 
+        # VMware Workstation 17 호환성 설정
+        vmware.vmx["virtualhw.version"] = "19"  # Workstation 17.x 호환
+        vmware.vmx["virtualHW.productCompatibility"] = "hosted"
+        vmware.vmx["tools.syncTime"] = "TRUE"
       end
       
       worker.vm.hostname = "k8s-worker#{i}"

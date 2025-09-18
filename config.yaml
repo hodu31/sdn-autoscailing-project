@@ -1,24 +1,22 @@
-
 ROOT_PASSWORD: sodlfgo!
 ADMIN_PASSWORD: gkrltlfgdj!
 VAGRANT_PASSWORD: rmajsTlq!
 
-
 # 네트워크 설정
-NETWORK_SUBNET: '192.168.100'
-MGMT_IP: '192.168.100.10'          # Management Server (VM1)
-SDN_IP: '192.168.100.20'           # SDN Controller (VM2)
-K8S_MASTER_IP: '192.168.100.30'    # Kubernetes Master (VM3)
-K8S_WORKER_START_IP: '31'          # Workers start from .31 (VM4+)
+NETWORK_SUBNET: "192.168.100"
+MGMT_IP: "192.168.100.10" # Management Server (VM1)
+SDN_IP: "192.168.100.20" # SDN Controller (VM2)
+K8S_MASTER_IP: "192.168.100.30" # Kubernetes Master (VM3)
+K8S_WORKER_START_IP: "31" # Workers start from .31 (VM4+)
 
 # 메모리 설정 (MB)
-MGMT_MEMORY: 3072      # Management Server - Prometheus, Grafana, Ansible
-SDN_MEMORY: 1536       # SDN Controller - Ryu, OpenVSwitch
-K8S_MASTER_MEMORY: 3072 # Kubernetes Master - API Server, etcd, Controller Manager
-K8S_WORKER_MEMORY: 2560 # Kubernetes Worker - kubelet, Container Runtime
+MGMT_MEMORY: 2024 # Management Server - Prometheus, Grafana, Ansible
+SDN_MEMORY: 2024 # SDN Controller - Ryu, OpenVSwitch
+K8S_MASTER_MEMORY: 2024 # Kubernetes Master - API Server, etcd, Controller Manager
+K8S_WORKER_MEMORY: 2024 # Kubernetes Worker - kubelet, Container Runtime
 
 # Kubernetes 워커 노드 수
-K8S_WORKER_COUNT: 2    # 기본 2개 워커 노드 생성
+K8S_WORKER_COUNT: 2 # 기본 2개 워커 노드 생성
 
 # 추가 설정 (선택사항)
 # KUBERNETES_VERSION: '1.28'

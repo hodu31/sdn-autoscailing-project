@@ -21,10 +21,8 @@ sed -i 's/^SELINUX=enforcing$/SELINUX=disabled/' /etc/selinux/config
 
 echo "=== DNS 설정 ==="
 echo "nameserver 168.126.63.1" >> /etc/resolv.conf
-
-echo "=== 필수 패키지 설치 ==="
-dnf install -y python3 python3-pip net-tools curl wget vim
-
+# 필수 패키지 설치
+dnf install -y python3 python3-pip vim curl git ansible
 echo "=== Kubernetes 요구사항 설정 ==="
 # swap 비활성화
 swapoff -a

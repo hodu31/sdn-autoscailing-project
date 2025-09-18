@@ -15,17 +15,6 @@ NETWORK_SUBNET=${NETWORK_SUBNET:-"192.168.100"}
 K8S_WORKER_START_IP=${K8S_WORKER_START_IP:-"31"}
 K8S_WORKER_COUNT=${K8S_WORKER_COUNT:-"2"}
 
-echo "=== Worker${WORKER_NUM} 네트워크 설정 ==="
-MAIN_CON=$(nmcli -t -f NAME,DEVICE con show | grep -E "(eth0|ens33|ens160)" | head -1 | cut -d: -f1)
-
-if [ -n "$MAIN_CON" ]; then
-    nmcli con mod "$MAIN_CON" ipv4.method manual
-    nmcli con mod "$MAIN_CON" ipv4.addresses "${WORKER_IP}/24"
-    nmcli con mod "$MAIN_CON" ipv4.gateway "${NETWORK_SUBNET}.1"
-    nmcli con mod "$MAIN_CON" ipv4.dns "168.126.63.1"
-    nmcli con down "$MAIN_CON" && nmcli con up "$MAIN_CON"
-fi
-
 echo "=== 방화벽 설정 (Kubernetes Worker 포트) ==="
 firewall-cmd --permanent --add-port=10250/tcp     # kubelet
 firewall-cmd --permanent --add-port=10255/tcp     # kubelet read-only

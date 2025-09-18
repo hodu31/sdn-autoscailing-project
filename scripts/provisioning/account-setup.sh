@@ -10,6 +10,13 @@ ROOT_PASSWORD=${ROOT_PASSWORD:-"defaultpass123"}
 ADMIN_PASSWORD=${ADMIN_PASSWORD:-"admin123"}
 VAGRANT_PASSWORD=${VAGRANT_PASSWORD:-"vagrant"}
 
+echo "=== SSH 서버 설치 ==="
+# SSH 서버가 설치되어 있지 않은 경우 설치
+if ! rpm -qa | grep -q openssh-server; then
+    echo "openssh-server 설치 중..."
+    yum install -y openssh-server openssh-clients
+fi
+
 echo "=== 계정 비밀번호 설정 ==="
 # Root 계정 비밀번호 설정
 echo "root:${ROOT_PASSWORD}" | chpasswd
