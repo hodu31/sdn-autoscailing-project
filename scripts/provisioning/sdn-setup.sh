@@ -17,15 +17,34 @@ echo "=== 필수 패키지 설치 ==="
 # 필수 패키지 설치
 dnf install -y python3 vim curl git
 dnf install -y python3-pip
+dnf install -y epel-release
+
 # Python 패키지 설치
 pip3 install prometheus-client
+
+# crb 
+dnf config-manager --set-enabled crb
 
 echo "=== SDN 관련 패키지 설치 ==="
 # 개발 도구 설치
 dnf install -y python3-devel gcc
 
-# OpenVSwitch 설치
-dnf install -y openvswitch
+dnf install -y centos-release-nfv-openvswitch
+
+dnf clean all
+dnf makecache
+
+# 사용 가능한 OpenVSwitch 패키지 확인
+echo "=== 사용 가능한 OpenVSwitch 패키지 확인 ==="
+dnf search openvswitch | head -20
+
+# OpenVSwitch 설치 - 올바른 패키지 이름 사용
+# Rocky Linux 9에서는 openvswitch3.1이나 openvswitch2.17 같은 버전이 붙은 이름을 사용합니다
+echo "=== OpenVSwitch 패키지 설치 ==="
+dnf install -y openvswitch3.1 || dnf install -y openvswitch2.17 || dnf install -y openvswitch2*
+
+# Ryu Controller 설치
+pip3 install ryu eventlet
 
 # Ryu Controller 설치
 pip3 install ryu eventlet
