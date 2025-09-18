@@ -13,17 +13,21 @@ NETWORK_SUBNET=${NETWORK_SUBNET:-"192.168.100"}
 K8S_WORKER_START_IP=${K8S_WORKER_START_IP:-"31"}
 K8S_WORKER_COUNT=${K8S_WORKER_COUNT:-"2"}
 
+
+echo "=== 필수 패키지 설치 ==="
+# 필수 패키지 설치
+dnf install -y python3 vim curl git
+dnf install -y python3-pip
+# Python 패키지 설치
+pip3 install prometheus-client
+
+
 echo "=== 관리 도구 설치 ==="
 # EPEL 저장소 추가
 dnf install -y epel-release
 
 # Ansible 설치
 dnf install -y ansible
-# Python 패키지 설치
-pip3 install prometheus-client
-
-# 필수 패키지 설치
-dnf install -y python3 python3-pip vim curl git
 
 echo "=== Hosts 파일 업데이트 ==="
 # 기존 항목이 있으면 제거
