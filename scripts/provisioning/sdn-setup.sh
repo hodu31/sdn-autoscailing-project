@@ -13,6 +13,8 @@ NETWORK_SUBNET=${NETWORK_SUBNET:-"192.168.100"}
 K8S_WORKER_START_IP=${K8S_WORKER_START_IP:-"31"}
 K8S_WORKER_COUNT=${K8S_WORKER_COUNT:-"2"}
 
+# 필수 패키지 설치
+dnf install -y python3 python3-pip vim curl git
 
 echo "=== SDN 관련 패키지 설치 ==="
 # 개발 도구 설치

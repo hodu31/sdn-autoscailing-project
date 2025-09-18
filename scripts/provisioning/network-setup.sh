@@ -21,12 +21,6 @@ sed -i 's/^SELINUX=enforcing$/SELINUX=disabled/' /etc/selinux/config
 
 echo "=== DNS 설정 ==="
 echo "nameserver 168.126.63.1" >> /etc/resolv.conf
-# 필수 패키지 설치
-dnf install -y python3 python3-pip vim curl git ansible
-echo "=== Kubernetes 요구사항 설정 ==="
-# swap 비활성화
-swapoff -a
-sed -i '/ swap / s/^\(.*\)$/#\1/g' /etc/fstab
 
 # 커널 모듈 로드
 modprobe br_netfilter

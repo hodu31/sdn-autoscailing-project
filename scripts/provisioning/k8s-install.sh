@@ -16,6 +16,9 @@ gpgkey=https://pkgs.k8s.io/core:/stable:/v1.28/rpm/repodata/repomd.xml.key
 exclude=kubelet kubeadm kubectl cri-tools kubernetes-cni
 EOF
 
+# 필수 패키지 설치
+dnf install -y python3 python3-pip vim curl git
+
 echo "=== Kubernetes 패키지 설치 ==="
 dnf install -y kubelet kubeadm kubectl --disableexcludes=kubernetes
 

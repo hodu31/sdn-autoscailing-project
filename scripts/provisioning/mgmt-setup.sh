@@ -22,6 +22,9 @@ dnf install -y ansible
 # Python 패키지 설치
 pip3 install prometheus-client
 
+# 필수 패키지 설치
+dnf install -y python3 python3-pip vim curl git
+
 echo "=== Hosts 파일 업데이트 ==="
 # 기존 항목이 있으면 제거
 sed -i '/mgmt-server/d' /etc/hosts
