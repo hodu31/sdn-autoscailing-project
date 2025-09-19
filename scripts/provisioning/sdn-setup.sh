@@ -18,6 +18,7 @@ echo "=== 필수 패키지 설치 ==="
 dnf install -y python3 vim curl git
 dnf install -y python3-pip
 dnf install -y epel-release
+dnf install -y nano
 
 # Python 패키지 설치
 pip3 install prometheus-client
@@ -42,9 +43,6 @@ dnf search openvswitch | head -20
 # Rocky Linux 9에서는 openvswitch3.1이나 openvswitch2.17 같은 버전이 붙은 이름을 사용합니다
 echo "=== OpenVSwitch 패키지 설치 ==="
 dnf install -y openvswitch3.1 || dnf install -y openvswitch2.17 || dnf install -y openvswitch2*
-
-# Ryu Controller 설치
-pip3 install ryu eventlet
 
 # Ryu Controller 설치
 pip3 install ryu eventlet

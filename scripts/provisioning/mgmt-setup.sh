@@ -18,6 +18,7 @@ echo "=== 필수 패키지 설치 ==="
 # 필수 패키지 설치
 dnf install -y python3 vim curl git
 dnf install -y python3-pip
+dnf install -y nano
 # Python 패키지 설치
 pip3 install prometheus-client
 
