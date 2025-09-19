@@ -3,7 +3,7 @@
 # 통합 DevOps 클러스터 설정 스크립트
 # 전체 클러스터를 자동으로 설정하고 초기화합니다
 
-set -e  # 에러 발생시 스크립트 종료
+#set -e  # 에러 발생시 스크립트 종료
 
 # 색상 정의 (Windows 호환)
 if [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "cygwin" ]] || [[ -n "$WINDIR" ]]; then
@@ -182,7 +182,6 @@ test_network_connectivity() {
     fi
 }
 
-# Ansible 설정
 setup_ansible() {
     log_info "Ansible 설정 중..."
     
@@ -197,8 +196,10 @@ setup_ansible() {
         return 1
     fi
     
-    # 인벤토리 파일 생성
-    cat > temp_hosts.yml << 'EOF'
+    # Windows 호환: vagrant upload 대신 VM 내부에서 직접 파일 생성
+    log_info "Ansible 인벤토리 파일 생성 중..."
+    if vagrant ssh mgmt -c "
+        cat > /tmp/hosts.yml << 'EOF'
 ---
 all:
   vars:
@@ -231,28 +232,29 @@ all:
         k8s-worker2:
           ansible_host: 192.168.100.32
 EOF
-    
-    # 파일을 Management VM으로 복사
-    if vagrant upload temp_hosts.yml /tmp/hosts.yml mgmt && \
-       vagrant ssh mgmt -c "
-        sudo mv /tmp/hosts.yml /opt/ansible/inventory/
-        sudo chown vagrant:vagrant /opt/ansible/inventory/hosts.yml
+
+        # 파일 복사 및 권한 설정
+        sudo cp /tmp/hosts.yml /opt/ansible/inventory/
+        sudo chown -R vagrant:vagrant /opt/ansible
+        echo 'Ansible 인벤토리 파일 생성 완료'
     "; then
-        log_success "Ansible 인벤토리 파일 복사 완료"
+        log_success "Ansible 인벤토리 파일 생성 완료"
     else
-        log_error "Ansible 인벤토리 파일 복사 실패"
+        log_error "Ansible 인벤토리 파일 생성 실패"
+        return 1
     fi
-    
-    # 임시 파일 삭제
-    rm -f temp_hosts.yml
     
     # Ansible 연결 테스트
     log_info "Ansible 연결 테스트 중..."
-    if vagrant ssh mgmt -c "cd /opt/ansible && ansible all -i inventory/hosts.yml -m ping" 2>/dev/null | grep -q "SUCCESS"; then
+    if vagrant ssh mgmt -c "
+        cd /opt/ansible 
+        ansible all -i inventory/hosts.yml -m ping -o
+    " 2>/dev/null | grep -q "SUCCESS"; then
         log_success "Ansible 연결 테스트 성공"
     else
         log_warning "Ansible 연결 테스트 실패 - 수동으로 확인 필요"
         log_warning "VM들이 완전히 준비되지 않았을 수 있습니다"
+        # 실패해도 계속 진행 (치명적이지 않음)
     fi
 }
 
@@ -342,6 +344,156 @@ initialize_kubernetes() {
     fi
 }
 
+
+# 클러스터 상태 확인 함수
+check_existing_cluster() {
+    log_info "기존 클러스터 상태 확인 중..."
+    
+    local cluster_exists=false
+    local master_initialized=false
+    local workers_joined=0
+    
+    # K8s Master가 초기화되었는지 확인
+    if vagrant ssh k8s-master -c "sudo test -f /etc/kubernetes/admin.conf" 2>/dev/null; then
+        master_initialized=true
+        cluster_exists=true
+        log_info "Kubernetes Master가 이미 초기화되어 있습니다"
+        
+        # 노드 개수 확인
+        local node_count=$(vagrant ssh k8s-master -c "kubectl get nodes --no-headers 2>/dev/null | wc -l" 2>/dev/null || echo "0")
+        local ready_nodes=$(vagrant ssh k8s-master -c "kubectl get nodes --no-headers 2>/dev/null | grep -c Ready" 2>/dev/null || echo "0")
+        
+        log_info "총 노드 수: $node_count, Ready 노드 수: $ready_nodes"
+        
+        if [[ $node_count -gt 1 ]]; then
+            workers_joined=$((node_count - 1))
+            log_info "Worker 노드 $workers_joined개가 조인되어 있습니다"
+        fi
+    fi
+    
+    # Ansible 설정 확인
+    local ansible_configured=false
+    if vagrant ssh mgmt -c "test -f /opt/ansible/inventory/hosts.yml" 2>/dev/null; then
+        ansible_configured=true
+        log_info "Ansible 인벤토리가 이미 설정되어 있습니다"
+    fi
+    
+    # 상태에 따른 사용자 선택
+    if [[ "$cluster_exists" == true ]]; then
+        echo ""
+        log_warning "기존 클러스터가 발견되었습니다!"
+        echo "현재 상태:"
+        echo "  - Master 초기화: $master_initialized"
+        echo "  - Worker 노드: $workers_joined개 조인됨"
+        echo "  - Ansible 설정: $ansible_configured"
+        echo ""
+        echo "선택사항:"
+        echo "  1) 기존 클러스터 유지하고 부족한 부분만 설정"
+        echo "  2) 전체 클러스터 재구성 (기존 설정 삭제)"
+        echo "  3) 설정 중단"
+        echo ""
+        read -p "선택하세요 (1/2/3): " choice
+        
+        case $choice in
+            1)
+                log_info "기존 클러스터를 유지하고 부족한 부분만 설정합니다"
+                return 1  # 부분 설정 모드
+                ;;
+            2)
+                log_warning "전체 클러스터를 재구성합니다. 기존 설정이 삭제됩니다."
+                reset_cluster
+                return 0  # 전체 설정 모드
+                ;;
+            3)
+                log_info "설정을 중단합니다"
+                exit 0
+                ;;
+            *)
+                log_warning "잘못된 선택입니다. 기본값(1)으로 진행합니다"
+                return 1
+                ;;
+        esac
+    fi
+    
+    return 0  # 새로운 설정 모드
+}
+
+# 클러스터 초기화 함수
+reset_cluster() {
+    log_info "기존 클러스터 초기화 중..."
+    
+    # K8s 클러스터 리셋
+    log_info "Kubernetes 클러스터 리셋 중..."
+    vagrant ssh k8s-master -c "sudo kubeadm reset -f" 2>/dev/null || true
+    vagrant ssh k8s-worker1 -c "sudo kubeadm reset -f" 2>/dev/null || true
+    vagrant ssh k8s-worker2 -c "sudo kubeadm reset -f" 2>/dev/null || true
+    
+    # Ansible 설정 삭제
+    log_info "Ansible 설정 삭제 중..."
+    vagrant ssh mgmt -c "sudo rm -rf /opt/ansible/*" 2>/dev/null || true
+    
+    log_success "클러스터 초기화 완료"
+}
+
+# 부분 설정 함수
+partial_setup() {
+    log_info "부족한 구성 요소를 확인하고 설정합니다..."
+    
+    # Ansible 설정 확인
+    if ! vagrant ssh mgmt -c "test -f /opt/ansible/inventory/hosts.yml" 2>/dev/null; then
+        log_info "Ansible 설정이 필요합니다"
+        setup_ansible
+    else
+        log_success "Ansible 설정이 이미 완료되어 있습니다"
+    fi
+    
+    # Worker 노드 조인 상태 확인
+    local node_count=$(vagrant ssh k8s-master -c "kubectl get nodes --no-headers 2>/dev/null | wc -l" 2>/dev/null || echo "0")
+    if [[ $node_count -lt 3 ]]; then
+        log_info "Worker 노드 조인이 필요합니다"
+        rejoin_workers
+    else
+        log_success "모든 Worker 노드가 이미 조인되어 있습니다"
+    fi
+    
+    # 샘플 애플리케이션 확인
+    if ! vagrant ssh k8s-master -c "kubectl get deployment nginx" 2>/dev/null; then
+        log_info "샘플 애플리케이션 배포가 필요합니다"
+        deploy_sample_app
+    else
+        log_success "샘플 애플리케이션이 이미 배포되어 있습니다"
+    fi
+}
+
+# Worker 노드 재조인 함수
+rejoin_workers() {
+    log_info "Worker 노드들을 재조인합니다..."
+    
+    # 기존 Worker 노드 초기화
+    vagrant ssh k8s-worker1 -c "sudo kubeadm reset -f" 2>/dev/null || true
+    vagrant ssh k8s-worker2 -c "sudo kubeadm reset -f" 2>/dev/null || true
+    
+    # 새 조인 명령어 생성
+    local join_command
+    join_command=$(vagrant ssh k8s-master -c "sudo kubeadm token create --print-join-command" 2>/dev/null | tail -1)
+    
+    if [[ -n "$join_command" ]]; then
+        log_success "Join 명령어 생성 완료"
+        
+        # Worker 노드 조인
+        for worker in k8s-worker1 k8s-worker2; do
+            log_info "${worker} 조인 중..."
+            if vagrant ssh "$worker" -c "sudo $join_command"; then
+                log_success "${worker} 조인 완료"
+            else
+                log_warning "${worker} 조인 실패"
+            fi
+        done
+    else
+        log_error "Join 명령어 생성 실패"
+    fi
+}
+
 # 기본 애플리케이션 배포
 deploy_sample_app() {
     log_info "샘플 애플리케이션 배포 중..."
@@ -414,7 +566,7 @@ show_cluster_info() {
     echo ""
 }
 
-# 메인 실행 함수
+#메인 실행 함수
 main() {
     echo ""
     echo "🏗️  통합 DevOps 클러스터 설정 시작"
@@ -422,31 +574,53 @@ main() {
     echo ""
     
     # 1. 전제조건 확인
-    show_progress 1 7 "전제조건 확인"
+    show_progress 1 8 "전제조건 확인"
     check_prerequisites
     
-    # 2. VM 시작
-    show_progress 2 7 "VM 시작"
+    # 2. 기존 클러스터 상태 확인
+    show_progress 2 8 "클러스터 상태 확인"
+    if check_existing_cluster; then
+        setup_mode="full"
+    else
+        setup_mode="partial"
+    fi
+    
+    if [[ "$setup_mode" == "partial" ]]; then
+        # 부분 설정 실행
+        show_progress 3 8 "부분 설정 실행"
+        partial_setup
+        
+        # 정보 출력
+        show_progress 8 8 "클러스터 정보 출력"
+        show_cluster_info
+        
+        log_success "🎉 클러스터 부분 설정이 완료되었습니다!"
+        return
+    fi
+    
+    # 전체 설정 모드
+    # 3. VM 시작
+    show_progress 3 8 "VM 시작"
     start_vms
     
-    # 3. 네트워크 테스트
-    show_progress 3 7 "네트워크 연결 테스트"
+    # 4. 네트워크 테스트
+    show_progress 4 8 "네트워크 연결 테스트"
     test_network_connectivity
     
-    # 4. Ansible 설정
-    show_progress 4 7 "Ansible 설정"
+    # 5. Ansible 설정
+    show_progress 5 8 "Ansible 설정"
     setup_ansible
     
-    # 5. Kubernetes 초기화
-    show_progress 5 7 "Kubernetes 클러스터 초기화"
+    # 6. Kubernetes 초기화
+    show_progress 6 8 "Kubernetes 클러스터 초기화"
     initialize_kubernetes
     
-    # 6. 샘플 앱 배포
-    show_progress 6 7 "샘플 애플리케이션 배포"
+    # 7. 샘플 앱 배포
+    show_progress 7 8 "샘플 애플리케이션 배포"
     deploy_sample_app
     
-    # 7. 정보 출력
-    show_progress 7 7 "클러스터 정보 출력"
+    # 8. 정보 출력
+    show_progress 8 8 "클러스터 정보 출력"
     show_cluster_info
     
     log_success "🎉 통합 DevOps 클러스터 설정이 완료되었습니다!"

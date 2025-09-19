@@ -22,6 +22,13 @@ firewall-cmd --permanent --add-port=30000-32767/tcp # NodePort Services
 firewall-cmd --permanent --add-port=6783/tcp      # Flannel
 firewall-cmd --reload
 
+echo "=== Swap 비활성화 (Kubernetes 필수 요구사항) ==="
+# 현재 활성화된 swap 즉시 비활성화
+swapoff -a
+# 부팅시 자동으로 swap이 활성화되지 않도록 설정
+sed -i '/ swap / s/^\(.*\)$/#\1/g' /etc/fstab
+echo "Swap 비활성화 완료"
+
 echo "=== Hosts 파일 업데이트 ==="
 cat <<EOF >> /etc/hosts
 ${MGMT_IP} mgmt-server

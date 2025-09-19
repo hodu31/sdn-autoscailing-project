@@ -12,7 +12,7 @@ K8S_WORKER_START_IP: "31" # Workers start from .31 (VM4+)
 # 메모리 설정 (MB)
 MGMT_MEMORY: 1024 # Management Server - Prometheus, Grafana, Ansible
 SDN_MEMORY: 1024 # SDN Controller - Ryu, OpenVSwitch
-K8S_MASTER_MEMORY: 1024 # Kubernetes Master - API Server, etcd, Controller Manager
+K8S_MASTER_MEMORY: 2048 # Kubernetes Master - API Server, etcd, Controller Manager
 K8S_WORKER_MEMORY: 1024 # Kubernetes Worker - kubelet, Container Runtime
 
 # Kubernetes 워커 노드 수
