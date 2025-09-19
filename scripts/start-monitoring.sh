@@ -13,7 +13,7 @@ NC='\033[0m'
 echo -e "${BLUE}=== 모니터링 스택 시작 ===${NC}"
 
 # 모니터링 디렉토리로 이동
-cd /vagrant/monitoring
+cd /monitoring
 
 # Docker Compose로 서비스 시작
 echo -e "${BLUE}Docker Compose 서비스 시작 중...${NC}"
