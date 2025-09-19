@@ -116,8 +116,8 @@
                   labels:
                     severity: critical
                   annotations:
-                    summary: "Node {{ $labels.instance }} is down"
-                    description: "{{ $labels.instance }} has been down for more than 1 minute"
+                    summary: "Node {% raw %}{{ $labels.instance }}{% endraw %} is down"
+                    description: "{% raw %}{{ $labels.instance }}{% endraw %} has been down for more than 1 minute"
 
                 - alert: HighCPUUsage
                   expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
@@ -125,8 +125,8 @@
                   labels:
                     severity: warning
                   annotations:
-                    summary: "High CPU usage on {{ $labels.instance }}"
-                    description: "CPU usage is {{ $value | humanize }}% for more than 2 minutes"
+                    summary: "High CPU usage on {% raw %}{{ $labels.instance }}{% endraw %}"
+                    description: "CPU usage is {% raw %}{{ $value | humanize }}{% endraw %}% for more than 2 minutes"
 
                 - alert: HighMemoryUsage
                   expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100 > 85
@@ -134,8 +134,8 @@
                   labels:
                     severity: warning
                   annotations:
-                    summary: "High memory usage on {{ $labels.instance }}"
-                    description: "Memory usage is {{ $value | humanize }}% for more than 5 minutes"
+                    summary: "High memory usage on {% raw %}{{ $labels.instance }}{% endraw %}"
+                    description: "Memory usage is {% raw %}{{ $value | humanize }}{% endraw %}% for more than 5 minutes"
 
                 - alert: DiskSpaceLow
                   expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 < 10
@@ -143,8 +143,8 @@
                   labels:
                     severity: critical
                   annotations:
-                    summary: "Disk space low on {{ $labels.instance }}"
-                    description: "Disk space is {{ $value | humanize }}% remaining"
+                    summary: "Disk space low on {% raw %}{{ $labels.instance }}{% endraw %}"
+                    description: "Disk space is {% raw %}{{ $value | humanize }}{% endraw %}% remaining"
 
                 - alert: DockerContainerDown
                   expr: engine_daemon_container_states_containers{state="running"} < 4
