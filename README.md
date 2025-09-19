@@ -4,56 +4,6 @@
 
 ## 📁 프로젝트 구조
 
-```
-sdn-autoscaling-project/
-├── Vagrantfile                    # 간소화된 VM 정의
-├── config.yaml                    # 설정 파일
-├── setup-cluster.sh               # 전체 클러스터 자동 설정
-├── cluster-manager.sh             # 클러스터 관리 도구
-├── Makefile                       # 빠른 명령어
-├── README.md                      # 이 파일
-│
-├── scripts/                       # 🔧 실행 스크립트들
-│   ├── provisioning/              # VM 프로비저닝 스크립트
-│   │   ├── account-setup.sh       # 계정 및 SSH 설정
-│   │   ├── network-setup.sh       # 기본 네트워크 설정
-│   │   ├── docker-install.sh      # Docker 설치
-│   │   ├── containerd-setup.sh    # containerd 설정
-│   │   ├── k8s-install.sh         # Kubernetes 패키지 설치
-│   │   ├── mgmt-setup.sh          # Management Server 설정
-│   │   ├── sdn-setup.sh           # SDN Controller 설정
-│   │   ├── k8s-master-setup.sh    # K8s Master 설정
-│   │   └── k8s-worker-setup.sh    # K8s Worker 설정
-│   ├── start-monitoring.sh        # 모니터링 스택 시작
-│   └── start-sdn.sh               # SDN Controller 시작
-│
-├── monitoring/                    # 📊 모니터링 설정
-│   ├── docker-compose.yml         # 모니터링 스택 (Prometheus, Grafana, AlertManager)
-│   ├── prometheus/
-│   │   ├── prometheus.yml         # Prometheus 설정
-│   │   └── alert-rules.yml        # 알림 규칙
-│   ├── alertmanager/
-│   │   └── alertmanager.yml       # AlertManager 설정
-│   └── grafana/
-│       ├── datasources/           # 데이터소스 설정
-│       └── dashboards/            # 대시보드 설정
-│
-├── sdn/                           # 🌐 SDN 애플리케이션
-│   └── load_balancer.py           # Ryu 로드밸런서
-│
-├── k8s-manifests/                 # ☸️ Kubernetes 매니페스트
-│   ├── applications/
-│   │   └── nginx-app.yml          # 샘플 애플리케이션 + HPA
-│   └── monitoring/
-│       └── node-exporter.yml     # 노드 모니터링
-│
-└── ansible/                       # 🤖 Ansible 자동화
-    ├── inventory/
-    │   └── hosts.yml              # 서버 인벤토리
-    └── playbooks/
-        └── setup-k8s-cluster.yml # K8s 클러스터 설정
-```
-
 ## 🚀 주요 개선사항
 
 ### ✨ 파일 분리 및 모듈화
@@ -61,15 +11,6 @@ sdn-autoscaling-project/
 - **재사용 가능한 스크립트**: 각 기능별로 독립적인 스크립트 파일
 - **Docker Compose**: 모니터링 스택을 컨테이너로 관리
 - **Kubernetes 매니페스트**: 애플리케이션 배포 템플릿
-
-### 🔧 스크립트 구조
-```bash
-scripts/provisioning/
-├── account-setup.sh      # 계정 설정 (재사용 가능)
-├── network-setup.sh      # 네트워크 설정 (재사용 가능)
-├── docker-install.sh     # Docker 설치 (재사용 가능)
-└── [role]-setup.sh       # 역할별 전용 설정
-```
 
 ## 📊 모니터링 스택
 
