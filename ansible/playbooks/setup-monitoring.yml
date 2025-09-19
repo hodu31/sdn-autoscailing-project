@@ -245,7 +245,6 @@
       - name: Create optimized Docker Compose file
         copy:
             content: |
-                version: '3.8'
 
                 services:
                   prometheus:
