@@ -1,98 +1,68 @@
 global:
-  smtp_smarthost: 'localhost:587'
-  smtp_from: 'alertmanager@devops-cluster.local'
-  resolve_timeout: 5m
+    smtp_smarthost: "localhost:587"
+    smtp_from: "alertmanager@devops-cluster.local"
+    resolve_timeout: 5m
 
 # 알림 라우팅 설정
 route:
-  group_by: ['alertname', 'cluster', 'service']
-  group_wait: 10s
-  group_interval: 10s
-  repeat_interval: 1h
-  receiver: 'default-receiver'
-  routes:
-    # 크리티컬 알림은 즉시 전송
-    - match:
-        severity: critical
-      receiver: 'critical-receiver'
-      group_wait: 0s
-      repeat_interval: 30m
-    
-    # 경고 알림은 그룹화해서 전송
-    - match:
-        severity: warning
-      receiver: 'warning-receiver'
-      group_wait: 30s
-      repeat_interval: 2h
+    group_by: ["alertname", "cluster", "service"]
+    group_wait: 10s
+    group_interval: 10s
+    repeat_interval: 1h
+    receiver: "default-receiver"
+    routes:
+        # 크리티컬 알림은 즉시 전송
+        - match:
+              severity: critical
+          receiver: "critical-receiver"
+          group_wait: 0s
+          repeat_interval: 30m
+
+        # 경고 알림은 그룹화해서 전송
+        - match:
+              severity: warning
+          receiver: "warning-receiver"
+          group_wait: 30s
+          repeat_interval: 2h
 
 # 수신자 설정
 receivers:
-  - name: 'default-receiver'
-    webhook_configs:
-      - url: 'http://192.168.100.10:9094/webhook'
-        send_resolved: true
-        title: '[DevOps Cluster] {{ .GroupLabels.alertname }}'
-        text: |
-          {{ range .Alerts }}
-          Alert: {{ .Annotations.summary }}
-          Description: {{ .Annotations.description }}
-          Instance: {{ .Labels.instance }}
-          Severity: {{ .Labels.severity }}
-          {{ end }}
+    - name: "default-receiver"
+      webhook_configs:
+          - url: "http://192.168.100.10:9094/webhook"
+            send_resolved: true
 
-  - name: 'critical-receiver'
-    webhook_configs:
-      - url: 'http://192.168.100.10:9094/webhook/critical'
-        send_resolved: true
-        title: '🚨 [CRITICAL] {{ .GroupLabels.alertname }}'
-        text: |
-          {{ range .Alerts }}
-          🔥 Critical Alert: {{ .Annotations.summary }}
-          📋 Description: {{ .Annotations.description }}
-          🖥️ Instance: {{ .Labels.instance }}
-          ⏰ Started: {{ .StartsAt.Format "2006-01-02 15:04:05" }}
-          {{ end }}
-    
-    # Slack 알림 (설정시)
-    # slack_configs:
-    #   - api_url: 'YOUR_SLACK_WEBHOOK_URL'
-    #     channel: '#alerts'
-    #     title: '🚨 Critical Alert'
-    #     text: |
-    #       {{ range .Alerts }}
-    #       Alert: {{ .Annotations.summary }}
-    #       Instance: {{ .Labels.instance }}
-    #       {{ end }}
+    - name: "critical-receiver"
+      webhook_configs:
+          - url: "http://192.168.100.10:9094/webhook/critical"
+            send_resolved: true
 
-  - name: 'warning-receiver'
-    webhook_configs:
-      - url: 'http://192.168.100.10:9094/webhook/warning'
-        send_resolved: true
-        title: '⚠️ [WARNING] {{ .GroupLabels.alertname }}'
-        text: |
-          {{ range .Alerts }}
-          ⚠️ Warning: {{ .Annotations.summary }}
-          📋 Description: {{ .Annotations.description }}
-          🖥️ Instance: {{ .Labels.instance }}
-          ⏰ Started: {{ .StartsAt.Format "2006-01-02 15:04:05" }}
-          {{ end }}
+    - name: "warning-receiver"
+      webhook_configs:
+          - url: "http://192.168.100.10:9094/webhook/warning"
+            send_resolved: true
+
+      # Slack 알림 (설정시)
+      # slack_configs:
+      #   - api_url: 'YOUR_SLACK_WEBHOOK_URL'
+      #     channel: '#alerts'
 
 # 알림 억제 규칙
 inhibit_rules:
-  # 노드가 다운되면 해당 노드의 다른 알림들을 억제
-  - source_match:
-      alertname: 'NodeDown'
-    target_match_re:
-      instance: '.*'
-    equal: ['instance']
+    # 노드가 다운되면 해당 노드의 다른 알림들을 억제
+    - source_match:
+          alertname: "NodeDown"
+      target_match_re:
+          instance: ".*"
+      equal: ["instance"]
 
-  # 크리티컬 알림이 있으면 같은 인스턴스의 경고 알림 억제
-  - source_match:
-      severity: 'critical'
-    target_match:
-      severity: 'warning'
-    equal: ['instance']
+    # 크리티컬 알림이 있으면 같은 인스턴스의 경고 알림 억제
+    - source_match:
+          severity: "critical"
+      target_match:
+          severity: "warning"
+      equal: ["instance"]
 
 # 알림 그룹화 설정
 templates:
-  - '/etc/alertmanager/templates/*.tmpl'
+    - "/etc/alertmanager/templates/*.tmpl"
