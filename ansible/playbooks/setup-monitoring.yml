@@ -397,7 +397,7 @@
       - name: Wait for all services to be healthy
         shell: |
             cd {{ monitoring_dir }}
-            timeout 300 bash -c 'while [[ $(docker compose ps --format json | jq -r ".[].Health" | grep -v "healthy\|null" | wc -l) -gt 0 ]]; do echo "Waiting for services to be healthy..."; sleep 10; done'
+            timeout 600 bash -c 'while [[ $(docker compose ps --format json | jq -r ".[].Health" | grep -v "healthy\|null" | wc -l) -gt 0 ]]; do echo "Waiting for services to be healthy..."; sleep 15; done'
         register: health_check
         changed_when: false
 
@@ -421,8 +421,8 @@
                   url: "http://192.168.100.10:9100/metrics",
                   name: "Node Exporter",
               }
-        retries: 5
-        delay: 10
+        retries: 10
+        delay: 15
 
       - name: Display final status
         debug:
