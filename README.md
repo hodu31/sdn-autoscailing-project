@@ -157,6 +157,8 @@ make k8s-pods          # Pod 상태 확인
 make k8s-services      # 서비스 확인
 ```
 
+ansible-playbook -i ansible/inventory/hosts.yml ansible/playbooks/setup-monitoring.yml
+
 ## 📈 모니터링 및 알림
 
 ### 자동 알림 설정
