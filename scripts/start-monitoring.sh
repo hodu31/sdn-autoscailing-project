@@ -17,12 +17,12 @@ cd /monitoring
 
 # Docker Compose로 서비스 시작
 echo -e "${BLUE}Docker Compose 서비스 시작 중...${NC}"
-docker-compose up -d
+docker compose up -d
 
 # 서비스 상태 확인
 echo -e "${BLUE}서비스 상태 확인 중...${NC}"
 sleep 10
-docker-compose ps
+docker compose ps
 
 echo -e "${GREEN}=== 모니터링 스택 시작 완료 ===${NC}"
 echo ""
